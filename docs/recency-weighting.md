@@ -1,74 +1,78 @@
-# 近期狀態加權（Recency Weighting）：實作紀錄與想法
+# Recency Weighting: Implementation Notes & Thinking
 
-日期：2026-10-10
+Date: 2026-10-10
 
-## 1. 動機：你問的問題
+## 1. Motivation: the question you asked
 
-> 「過去 5 場比賽的權重 vs 投手今年 vs 投手生涯，這樣的概念呢？」
+> "What about weighting the last 5 games vs. the pitcher's season vs. career numbers?"
 
-核心是預測建模的經典 trade-off：**近期狀態（靈敏、雜訊大）vs 大樣本平均（穩定、反應慢）**。
-一個投手可能上週改了握法、加了新球種——生涯平均完全反應不出來，但只看 5 場又可能是雜訊。
+This is the classic forecasting trade-off: **recent form (sensitive, noisy) vs. large-sample averages (stable, slow to react)**.
+A pitcher may have changed their grip or added a pitch last week — career averages won't capture that, but 5 games alone might just be noise.
 
-## 2. 我做了什麼
+## 2. What I did
 
-### 新增 `src/recency.py`：三層歷史特徵
+### New `src/recency.py`: three layers of historical features
 
-對每一次揮棒，計算該投手**嚴格在這場比賽之前**的歷史揮空率（`game_date` 嚴格小於當場，零洩漏）：
+For every swing, compute the pitcher's historical whiff rates using **only games strictly before the current game** (`game_date` strictly less than current — zero leakage):
 
-| 特徵 | 定義 |
+| Feature | Definition |
 |---|---|
-| `whiff_recent` | 最近 ≤5 場比賽的揮空率（近期狀態） |
-| `n_recent` | 該窗口的揮棒數（讓模型學會「這個數字可不可信」） |
-| `whiff_prior` | 之前**所有**比賽的揮空率（本季／生涯基線） |
-| `n_prior` | 基線的揮棒數 |
-| `whiff_recent_shrunk` | 貝氏收縮版：`(n·recent + k·prior) / (n + k)`，k=200 |
+| `whiff_recent` | Whiff rate over the most recent ≤5 games (recent form) |
+| `n_recent` | Swing count in that window (lets the model learn how much to trust it) |
+| `whiff_prior` | Whiff rate over ALL earlier games (season-to-date; doubles as the career baseline here) |
+| `n_prior` | Swing count behind the prior |
+| `whiff_recent_shrunk` | Bayesian shrinkage: `(n·recent + k·prior) / (n + k)`, k=200 |
 
-收縮的直覺：樣本少時估計值被往生涯均值拉，樣本多時相信近期數據。
-**收縮本身就是正則化**——它直接回答了「小樣本雜訊會不會 overfit」的擔心。
+Shrinkage intuition: small samples get pulled toward the career mean; large samples trust recent form.
+**Shrinkage is itself regularization** — it directly answers the "won't small samples overfit?" concern.
 
-### 新增 walk-forward 驗證（`model.py::evaluate_walkforward`）
+### New walk-forward validation (`model.py::evaluate_walkforward`)
 
-原本的 `evaluate()` 用隨機 `train_test_split`。時間序列特徵不能這樣切——
-隨機切分會讓「未來」的比賽資訊漏進訓練集，validation 的 AUC 會漂亮到不真實。
-改成：**9/1–9/14 訓練，9/15–9/21 測試**，模型永遠只看過去。
+The original `evaluate()` used a random `train_test_split`. You can't do that with time-dependent features —
+random splits leak future games into training, and validation AUC looks unrealistically good.
+Switched to: **train on 9/1–9/14, test on 9/15–9/21**. The model only ever sees the past.
 
-### 實驗（`run_recency_experiment.py`）
+### Experiment (`run_recency_experiment.py`)
 
-三組特徵比較，GradBoost，walk-forward：
+Three feature sets compared with GradBoost under walk-forward validation:
 
-| 特徵集 | ROC-AUC | AP |
+| Feature set | ROC-AUC | AP |
 |---|---|---|
-| baseline（原特徵） | **0.7567** | 0.5816 |
-| +recency（5 個全加） | 0.7550 | 0.5808 |
-| +shrunk（只加收縮版） | 0.7534 | 0.5793 |
+| baseline (original features) | **0.7567** | 0.5816 |
+| +recency (all 5 added) | 0.7550 | 0.5808 |
+| +shrunk (shrinkage only) | 0.7534 | 0.5793 |
 
-Permutation importance：5 個 recency 特徵全部排在最後（≈0），模型根本沒在用它們。
-真正重要的是 `dist_from_center`（0.159）、`plate_z`、`release_speed`——球進壘的位置和球速。
+Permutation importance: all 5 recency features rank dead last (≈0) — the model ignores them.
+What actually matters: `dist_from_center` (0.159), `plate_z`, `release_speed` — pitch location and velocity.
 
-## 3. 我的想法：為什麼沒用？（誠實的負結果）
+## 3. My thinking: why didn't it help? (an honest negative result)
 
-**資料窗口太短了。** 我們只有 9/1–9/21 三週的資料。先發投手三週大概只先發 3–4 場，
-所以「最近 5 場」幾乎等於「全部歷史」——`whiff_recent` 和 `whiff_prior` 算出來幾乎是同一個數字，
-特徵之間高度共線，對模型沒有邊際資訊。這不是方法錯，是資料不夠長。
+**The data window is too short.** We only have three weeks (9/1–9/21). A starter makes ~3–4 starts in three weeks,
+so "last 5 games" is nearly identical to "all history" — `whiff_recent` and `whiff_prior` compute almost the same
+number, the features are highly collinear, and there's no marginal signal for the model to learn.
+The method isn't wrong; the data isn't long enough.
 
-另外 27% 的揮棒是該投手在窗口內的第一場比賽（沒有歷史），只能用中位數填補，進一步稀釋了訊號。
+Also, 27% of swings are the pitcher's first game in the window (no history), median-imputed, which further dilutes the signal.
 
-換句話說：**在三週資料上，「近期 vs 生涯」的區分根本不存在**。要有完整球季（~30 場先發）
-的資料，這三層才會真正分開，實驗才有意義。
+In other words: **on three weeks of data, the recent-vs-career distinction doesn't exist**.
+With a full season (~30 starts), the three layers would properly separate and the experiment would be meaningful.
 
-## 4. 下一步（如果要繼續）
+## 4. Next steps (if you want to continue)
 
-1. **拉長資料**：抓完整 2026 球季，`whiff_prior` 拆成「本季」和「生涯（往年）」兩層，
-   這才是你原本想的三層架構。
-2. **對手強度校正**：近期揮空率高可能是對手弱，加入對方打線平均揮空率當 offset。
-3. **EWMA 取代硬切 5 場**：`w = λ^d` 指數衰減，λ 當超參數調，比「第 6 場突然掉出去」平滑。
-4. **驗證「王牌加成」假說**：模型系統性低估王牌約 4 個百分點——如果加上真正的近期特徵
-   （完整球季資料），看這個 gap 會不會縮小。這會是作品集裡很漂亮的一個故事：
-   *baseline → 發現系統性偏差 → 假說（跟不上近況）→ 加特徵 → gap 縮小*。
+1. **Longer data**: pull the full 2026 season; split `whiff_prior` into true "season" and "career (prior years)" layers —
+   the three-layer architecture you originally had in mind.
+2. **Opponent adjustment**: a high recent whiff rate might just mean weak opponents; add the opposing lineup's
+   average whiff rate as an offset.
+3. **EWMA instead of a hard 5-game cutoff**: `w = λ^d` exponential decay, tune λ as a hyperparameter —
+   smoother than a window where game #6 abruptly drops out.
+4. **Test the "ace premium" hypothesis**: the model systematically underestimates aces by ~4 points.
+   With real recency features (full-season data), check whether that gap shrinks. That would be a great
+   portfolio story arc: *baseline → discovered systematic bias → hypothesis (model can't keep up with form)
+   → added features → gap shrinks*.
 
-## 5. 檔案異動
+## 5. Files changed
 
-- 新增 `src/recency.py`（特徵工程，零洩漏）
-- `src/model.py`：新增 `build_pipeline_for()`、`evaluate_walkforward()`
-- 新增 `run_recency_experiment.py`、`recency_results.json`
-- 本文件 `docs/recency-weighting.md`
+- New `src/recency.py` (feature engineering, zero leakage)
+- `src/model.py`: new `build_pipeline_for()`, `evaluate_walkforward()`
+- New `run_recency_experiment.py`, `recency_results.json`
+- This file `docs/recency-weighting.md`
