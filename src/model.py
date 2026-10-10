@@ -19,17 +19,61 @@ def make_features(d: pd.DataFrame):
     return X, y
 
 
-def build_pipeline(model) -> Pipeline:
+def build_pipeline_for(num_features, cat_features, model) -> Pipeline:
     pre = ColumnTransformer(
         [
             ("num", Pipeline([("imp", SimpleImputer(strategy="median")),
-                              ("sc", StandardScaler())]), FEATURES_NUMERIC),
+                              ("sc", StandardScaler())]), num_features),
             ("cat", Pipeline([("imp", SimpleImputer(strategy="most_frequent")),
                               ("oh", OneHotEncoder(handle_unknown="ignore"))]),
-             FEATURES_CATEGORICAL),
+             cat_features),
         ]
     )
     return Pipeline([("pre", pre), ("clf", model)])
+
+
+def build_pipeline(model) -> Pipeline:
+    return build_pipeline_for(FEATURES_NUMERIC, FEATURES_CATEGORICAL, model)
+
+
+def evaluate_walkforward(d: pd.DataFrame, feature_sets: dict,
+                         split_date: str, seed=42):
+    """Time-based validation: train on games before split_date, test after.
+
+    Random train/test splits leak future information when features are
+    time-dependent (recency windows). Walk-forward keeps the temporal
+    order honest: the model only ever sees the past.
+    """
+
+    d = d.copy()
+    d["game_date"] = pd.to_datetime(d["game_date"])
+    split = pd.to_datetime(split_date)
+    tr = d[d["game_date"] < split]
+    te = d[d["game_date"] >= split]
+    print(f"walk-forward split @ {split_date}: "
+          f"train={len(tr):,} swings, test={len(te):,} swings")
+
+    results = {}
+    for name, extra_num in feature_sets.items():
+        num = FEATURES_NUMERIC + list(extra_num)
+        Xtr, ytr = tr[num + FEATURES_CATEGORICAL].copy(), tr["whiff"].values
+        Xte, yte = te[num + FEATURES_CATEGORICAL].copy(), te["whiff"].values
+        m = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.06,
+                                           random_state=seed)
+        pipe = build_pipeline_for(num, FEATURES_CATEGORICAL, m)
+        pipe.fit(Xtr, ytr)
+        p = pipe.predict_proba(Xte)[:, 1]
+        results[name] = {
+            "roc_auc": roc_auc_score(yte, p),
+            "avg_precision": average_precision_score(yte, p),
+            "base_rate": yte.mean(),
+            "n_train": len(tr),
+            "n_test": len(te),
+        }
+        print(f"{name:16s} ROC-AUC={results[name]['roc_auc']:.4f}  "
+              f"AP={results[name]['avg_precision']:.4f}  "
+              f"(base whiff rate={yte.mean():.3f})")
+    return results
 
 
 def evaluate(d: pd.DataFrame, test_size=0.25, seed=42):
