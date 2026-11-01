@@ -58,7 +58,7 @@ def generate_prose(prompt: str, timeout: int = 60) -> tuple:
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.3,
-        "max_tokens": 600,
+        "max_tokens": 8000,
     }).encode()
     req = urllib.request.Request(
         f"{BASE_URL}/chat/completions", data=payload,
@@ -68,6 +68,12 @@ def generate_prose(prompt: str, timeout: int = 60) -> tuple:
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = json.loads(resp.read().decode())
-        return body["choices"][0]["message"]["content"].strip(), None
+        msg = body["choices"][0]["message"]
+        content = msg.get("content")
+        if content is None:
+            finish = body["choices"][0].get("finish_reason")
+            return None, f"Meta API returned no text content (finish_reason={finish})"
+        return content.strip(), None
+
     except (urllib.error.URLError, KeyError, IndexError, ValueError) as e:
         return None, f"Meta API call failed: {e}"

@@ -1,0 +1,44 @@
+{
+  "model": "HistGradientBoostingClassifier pipeline (ColumnTransformer + HGB)",
+  "max_iter": 75,
+  "learning_rate": 0.06,
+  "early_stopping": false,
+  "random_state": 42,
+  "target": "strict whiff (swinging_strike, swinging_strike_blocked only; foul_tip excluded)",
+  "swing_filter": "description in {swinging_strike, swinging_strike_blocked, foul, foul_tip, hit_into_play}",
+  "game_type_filter": [
+    "R",
+    ""
+  ],
+  "training_file": "data/statcast_sep2026.parquet",
+  "training_rows_raw": 80851,
+  "training_rows_swings": 38429,
+  "training_whiff_rate": 0.22878555257748054,
+  "features_numeric": [
+    "release_speed",
+    "release_spin_rate",
+    "release_extension",
+    "pfx_x",
+    "pfx_z",
+    "plate_x",
+    "plate_z",
+    "dist_from_center",
+    "balls",
+    "strikes",
+    "release_pos_x",
+    "release_pos_z",
+    "spin_axis",
+    "zone_height",
+    "zone_edge",
+    "inside_out",
+    "pitch_num_in_pa",
+    "velo_delta"
+  ],
+  "features_categorical": [
+    "pitch_type",
+    "stand",
+    "p_throws",
+    "prev_pitch_type"
+  ],
+  "validation_reference": "rebuild_eval_results.json strict: test AUC 0.777, 95% CI [0.766, 0.789], best_iter=75"
+}
