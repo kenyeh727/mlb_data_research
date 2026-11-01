@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Whiff Scout: Parker Messick</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:760px;margin:2em auto;
+padding:0 1em;color:#222} table{border-collapse:collapse;width:100%}
+th,td{border:1px solid #ccc;padding:6px 10px;text-align:left}
+th{background:#f0f0f0} .flag{color:#b00;font-size:.85em}
+.note{background:#fff8e1;border:1px solid #e6c200;padding:10px}
+.small{color:#666;font-size:.9em}
+</style></head><body>
+<h1>Whiff Scout: Parker Messick</h1>
+<p class="small">Sample window: 2026-03-09 to 2026-10-08 "
+(3,335 pitches, 1,608 swings).
+Game types in sample: R: 2954, S: 229, D: 152. This window mixes
+regular season, spring training, and postseason games; it is NOT a
+pure regular-season sample.</p>
+<p class='note'>Prose note: live Muse Spark prose needs META_API_KEY in .env; numbers below are unaffected.</p>
+<h2>Pitch mix (share of all pitches)</h2>
+<table><tr><th>Pitch</th><th>Usage</th></tr><tr><td>FF</td><td>41.4%</td></tr><tr><td>CH</td><td>23.7%</td></tr><tr><td>SI</td><td>14.9%</td></tr><tr><td>CU</td><td>8.4%</td></tr><tr><td>SL</td><td>6.8%</td></tr><tr><td>FC</td><td>4.8%</td></tr></table>
+<h2>Whiff rate by pitch type</h2>
+<table><tr><th>Pitch</th><th>Swings (n)</th><th>Actual whiff</th>
+<th>Model predicted</th><th></th></tr><tr><td>Four-Seam Fastball (FF)</td><td>698</td><td>22.1%</td><td>18.4%</td><td></td></tr><tr><td>Changeup (CH)</td><td>419</td><td>35.3%</td><td>33.2%</td><td></td></tr><tr><td>Sinker (SI)</td><td>251</td><td>9.6%</td><td>11.2%</td><td></td></tr><tr><td>Slider (SL)</td><td>98</td><td>23.5%</td><td>26.6%</td><td></td></tr><tr><td>Curveball (CU)</td><td>74</td><td>12.2%</td><td>26.2%</td><td></td></tr><tr><td>Cutter (FC)</td><td>68</td><td>22.1%</td><td>17.3%</td><td></td></tr>
+<tr><td><b>Overall</b></td><td><b>1608</b></td>
+<td><b>23.2%</b></td>
+<td><b>22.0%</b></td><td></td></tr></table>
+<h2>Whiff vs batter handedness</h2>
+<table><tr><th>Batters</th><th>Swings (n)</th><th>Actual whiff</th>
+<th>Model predicted</th></tr><tr><td>Left-handed</td><td>439</td><td>23.7%</td><td>19.3%</td></tr><tr><td>Right-handed</td><td>1169</td><td>23.0%</td><td>22.9%</td></tr></table>
+<h2>Insights &amp; matchup advice</h2><ul><li>Out pitch: Changeup (CH) at 35.3% actual whiff over 419 swings.</li><li>Lowest-whiff offering: Sinker (SI) at 9.6% actual whiff over 251 swings.</li><li>Largest model gap: Curveball (CU) -- model overestimates whiff (26.2% predicted vs 12.2% actual).</li><li>Matchup lean: whiff rate is higher vs left-handed batters (LHB 23.7% vs RHB 23.0% actual).</li></ul>
+<h2>How this report was made</h2><ul><li>[Scout] Request: scouting report for Parker Messick.</li><li>[Scout] Plan: resolve to Statcast ID, load cached 2026 pitches, run the whiff model, write the report.</li><li>[Data] Resolved Parker Messick to Statcast ID 800048.</li><li>[Data] Loaded 3,335 pitches from cache.</li><li>[Data] Sample window: 2026-03-09 to 2026-10-08; game types: {&#x27;R&#x27;: 2954, &#x27;S&#x27;: 229, &#x27;D&#x27;: 152}.</li><li>[Analyst] Loaded whiff GBM (strict labels, 75 trees).</li><li>[Analyst] Scored 1,608 swings: overall actual 23.2% vs predicted 22.0%.</li><li>[Analyst] No META_API_KEY in .env -- using template prose. Live Muse Spark prose needs the key.</li></ul>
+<p class="small">Model: GBM whiff predictor, strict labels (foul tips excluded),
+75 trees, validation AUC 0.777 (95% CI 0.766-0.789), trained on ken's own
+MLB Statcast project. Data: Statcast via pybaseball (local cache).
+Small-sample rates (n &lt; 50) carry wide uncertainty and are flagged.</p>
+</body></html>
